@@ -2,7 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import http from 'http';
 import { Server } from 'socket.io';
-import Cors from 'cors';
+import cors from 'cors';
 import AppRoutes from './src/Routes/index.js';
 
 dotenv.config();
@@ -12,65 +12,62 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: "http://localhost:5173",
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST"],
+    credentials: true,
   }
 });
 const PORT = process.env.PORT || 8000;
 
-// io.on("connection", (socket) => {
-//   console.log("A magic bird is ready to deliver the messages");
+export const getReceiverSocketId = (receiverId) => {
+	return userSocketMap[receiverId];
+};
 
-//   socket.on("joinPerson", (person) => {
-//     socket.join(person);
-//     console.log(`bird has joined the person ${person}`);
-//   });
-
-//   socket.on("sendMessage", (message) => {
-//     io.to(message.person).emit("receiveMessage", message);
-//     console.log("message :" ,message.text,`From ${message.person} :` ,message.person);
-    
-//   });
-
-//   socket.on("typing", (person) => {
-//     io.to(person).emit("notifyTyping", `${person} is typing...`);
-//   });
-
-//   socket.on("disconnect", () => {
-//     console.log("connection is disconnected");
-//   });
-// });
+const userSocketMap = {}; // {userId: socketId}
 
 io.on("connection", (socket) => {
-  console.log("A user has connected");
+  console.log("a user connected", socket.id);
 
-  // Join a private room for the conversation between two users
+  const userId = socket.handshake.query.userId;
+  if (userId != "undefined") {
+    userSocketMap[userId] = socket.id;
+  }
+
+  // Emit the list of online users
+  io.emit("getOnlineUsers", Object.keys(userSocketMap));
+
+  // Join a private room
   socket.on("joinRoom", ({ sender, receiver }) => {
-    const room = [sender, receiver].sort().join('-');  // Unique room identifier
+    const room = [sender, receiver].sort().join('-');
     socket.join(room);
     console.log(`${sender} has joined the room with ${receiver}`);
   });
 
-  // Handle sending a message in the private room
+  // Send and receive messages
   socket.on("sendMessage", (message) => {
     const { sender, receiver, text } = message;
-    const room = [sender, receiver].sort().join('-');  // Unique room identifier
+    const room = [sender, receiver].sort().join('-');
     io.to(room).emit("receiveMessage", { sender, text });
     console.log(`Message from ${sender} to ${receiver}: ${text}`);
   });
 
+  // Notify typing status
   socket.on("typing", ({ sender, receiver }) => {
     const room = [sender, receiver].sort().join('-');
     io.to(room).emit("notifyTyping", `${sender} is typing...`);
   });
 
+  // Handle disconnection
   socket.on("disconnect", () => {
-    console.log("A user has disconnected");
+    console.log("user disconnected", socket.id);
+    delete userSocketMap[userId];
+    io.emit("getOnlineUsers", Object.keys(userSocketMap));
   });
 });
 
 
+
 app.use(express.json());
-app.use(Cors());
+app.use(cors());
 app.use("/", AppRoutes);
 
 server.listen(PORT, () => console.log(`server listening to the port ${PORT}`));

@@ -1,64 +1,123 @@
-import Message from '../Models/Messages.js';
+import { get } from "mongoose";
+import Message from "../Models/Messages.js";
+import User from "../Models/Users.js"
+import Conversation from "../Models/Conversation.js";
+import { getReceiverSocketId } from "../../index.js";
 
-// Controller to create a new message
-const createMessages = async (req, res) => {
-  const { person, text } = req.body;
+// // Controller to create a new message
 
-  // Check if person and text are provided
-  if (!person || !text) {
-    return res.status(400).json({ message: "Person and message text are required." });
-  }
-
+const sendMessage = async (req, res) => {
   try {
-    // Create and save the new message
-    const message = { person, text };
-    await saveMessage(message);  // Call the function to save the message to the database
-    res.status(201).json({ message: "Message sent successfully!" });
+    const { content } = req.body;
+    const { id: receiverId } = req.params;
+    const senderId = req.user._id;  // Assuming req.user._id is populated by some middleware
+
+    // Check if a conversation exists between sender and receiver
+    let conversation = await Conversation.findOne({
+      participants: { $all: [senderId, receiverId] },
+    });
+
+    // Create new conversation if one doesn't exist
+    if (!conversation) {
+      conversation = await Conversation.create({
+        participants: [senderId, receiverId],
+      });
+    }
+
+    // Create a new message
+    const newMessage = new Message({
+      senderId,
+      receiverId,
+      content,
+    });
+
+    // Add the new message to the conversation
+    if (newMessage) {
+      conversation.messages.push(newMessage._id);
+    }
+
+    // Save conversation and message in parallel
+    await Promise.all([conversation.save(), newMessage.save()]);
+
+    // Get the socket ID of the receiver
+    const receiverSocketId = getReceiverSocketId(receiverId);
+    console.log(receiverSocketId);
+    
+
+    // If the receiver is online, emit the new message via socket.io
+    if (receiverSocketId) {
+      io.to(receiverSocketId).emit("newMessage", newMessage);
+    }
+
+    // Send the message response
+    res.status(201).json(newMessage);
+
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Error in sendMessage controller:", error.message);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 
-// Controller to fetch messages for a specific person
+// Controller to fetch chat history for a specific user
 const getMessages = async (req, res) => {
   try {
-    const personId = req.params.personId;
+    const { userId } = req.params; // Get the user ID from the request parameters
+    const senderId = req.user._id; // Get logged-in user's ID
 
-    // Call the function to fetch message history
-    const messages = await getMessageHistory(personId);
+    const conversation = await Conversation.findOne({
+      participants: { $all: [senderId, userId] },
+    }).populate("messages"); // Fetch messages related to the conversation
+
+    if (!conversation) return res.status(200).json([]);
+
+    const messages = conversation.messages;
     res.status(200).json(messages);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("Error in getMessages controller: ", error.message);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
 
-// Utility function to fetch message history
-const getMessageHistory = async (person) => {
-  try {
-    const messages = await Message.find({ person }).sort({ timestamp: 1 });
-    return messages;
-  } catch (error) {
-    throw new Error("Error fetching message history");
-  }
-};
+//Controller to Get the Chats for Sidebar
 
-// Utility function to save a new message to the database
-const saveMessage = async (message) => {
+const getUsersForSidebar = async (req, res) => {
   try {
-    const newMessage = new Message({
-      person: message.person,
-      text: message.text,
+    const loggedInUserId = req.user._id; // Get logged-in user's ID
+    
+    // Find distinct users who have chatted with the logged-in user
+
+    const senderUsers = await Message.distinct('senderId', {
+      receiverId: loggedInUserId,
     });
-    await newMessage.save();
+
+    const receiverUsers = await Message.distinct('receiverId', {
+      senderId: loggedInUserId,
+    });
+
+    // Combine the results from both distinct calls
+    const chatUsers = [...new Set([...senderUsers, ...receiverUsers])]; // Combine and ensure unique users
+    
+    // Remove logged-in user ID from the result
+    const filteredUserIds = chatUsers.filter(userId => userId.toString() !== loggedInUserId.toString());
+    
+    // Fetch user details excluding the password
+    const filteredUsers = await User.find({ _id: { $in: filteredUserIds } }).select("-password");
+
+    console.log(filteredUsers);
+    
+
+    res.status(200).json(filteredUsers);
   } catch (error) {
-    throw new Error("Error saving message");
+    console.error("Error in getUsersForSidebar: ", error.message);
+    res.status(500).json({ error: "Internal server error" });
   }
 };
+
+
+
 
 export default {
-  createMessages,
+  sendMessage,
   getMessages,
-  getMessageHistory,
-  saveMessage
+  getUsersForSidebar,
 };
-

@@ -25,22 +25,36 @@ const createToken = async (payload) => {
 };
 
 const decodeToken = async (token) => {
-  const payload = await jwt.decode(token);
-  return payload;
+  try {
+    const payload = await jwt.verify(token, process.env.JWT_SECRECT);
+    return payload;
+  } catch (error) {
+    console.error('Error decoding token:', error);
+    return null;
+  }
 };
 
 const validate = async (req, res, next) => {
   let token = req.headers.authorization?.split(" ")[1];
   if (token) {
-    let payload = await decodeToken(token);
-    let currentTime = +new Date() / 1000;
-    if (payload.exp > currentTime) {
-      next();
-    } else res.status(400).send({ message: "Token Expired" });
+    try {
+      let payload = await decodeToken(token);
+      let currentTime = Math.floor(Date.now() / 1000);
+      
+      if (payload.exp > currentTime) {
+        req.user = payload;
+        next(); 
+      } else {
+        res.status(400).send({ message: "Token Expired" });
+      }
+    } catch (error) {
+      res.status(400).send({ message: "Invalid Token" });
+    }
   } else {
     res.status(400).send({ message: "No token Found" });
   }
 };
+
 
 const adminGaurd = async(req,res,next)=>{
     let token = req.headers.authorization?.split(" ")[1]

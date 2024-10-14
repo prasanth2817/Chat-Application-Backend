@@ -5,6 +5,6 @@ import MessageRoutes from './Messages.js';
 const router = express.Router();
 
 router.use('/user',UserRoutes)
-router.use('/message',MessageRoutes)
+router.use('/messages',MessageRoutes)
 
 export default router
