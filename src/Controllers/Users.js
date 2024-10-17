@@ -32,8 +32,8 @@ const Login = async (req, res) => {
       if (hashCompare) {
         let token = await Auth.createToken({
           _id: user._id,
-          firstName: user.firstName,
-          lastName: user.lastName,
+          fullName: user.fullName,
+          userName: user.userName,
           email: user.email,
           role: user.role,
         });
@@ -114,27 +114,35 @@ const resetPassword = async (req, res) => {
   }
 };
 
-// const getUsersByIds = async (req, res) => {
-//   try {
-//     const { ids } = req.body; // Extract IDs from the request body
-//     const users = await usersModel.find({ _id: { $in: ids } }); // Fetch users whose IDs match the provided IDs
+const Logout = (req, res) => {
+	try {
+		res.cookie("jwt", "", { maxAge: 0 });
+		res.status(200).json({ message: "Logged out successfully" });
+	} catch (error) {
+		console.error("Error in logout controller", error.message);
+		res.status(500).json({ error: "Internal Server Error" });
+	}
+};
 
-//     // Check if any users were found
-//     if (users.length > 0) {
-//       res.status(200).send(users); // Return the found users
-//     } else {
-//       res.status(404).send({ message: "No users found." }); // Handle case where no users are found
-//     }
-//   } catch (error) {
-//     res
-//       .status(500)
-//       .send({ message: "Internal Server error", error: error.message }); // Handle server errors
-//   }
-// };
+const checkUser =  async (req, res) => {
+  const {email} = req.body;
+  try {
+    const user = await usersModel.findOne({ email },{password:0});
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    res.json(user);    
+  } catch (error) {
+    res.status(500).json({ error: "Server error" });
+  }
+};
+
 
 export default {
   createUsers,
   Login,
+  Logout,
   forgetPassword,
   resetPassword,
+  checkUser 
 };

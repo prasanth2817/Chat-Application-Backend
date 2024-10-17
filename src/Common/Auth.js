@@ -1,6 +1,6 @@
-import bcrypt from "bcryptjs"
+import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import dotenv from "dotenv"
+import dotenv from "dotenv";
 dotenv.config();
 
 const hashPassword = async (password) => {
@@ -20,7 +20,7 @@ const createToken = async (payload) => {
     });
     return token;
   } catch (error) {
-    console.error('Error creating token:', error);
+    console.error("Error creating token:", error);
   }
 };
 
@@ -29,7 +29,7 @@ const decodeToken = async (token) => {
     const payload = await jwt.verify(token, process.env.JWT_SECRECT);
     return payload;
   } catch (error) {
-    console.error('Error decoding token:', error);
+    console.error("Error decoding token:", error);
     return null;
   }
 };
@@ -40,10 +40,10 @@ const validate = async (req, res, next) => {
     try {
       let payload = await decodeToken(token);
       let currentTime = Math.floor(Date.now() / 1000);
-      
+
       if (payload.exp > currentTime) {
         req.user = payload;
-        next(); 
+        next();
       } else {
         res.status(400).send({ message: "Token Expired" });
       }
@@ -55,22 +55,16 @@ const validate = async (req, res, next) => {
   }
 };
 
-
-const adminGaurd = async(req,res,next)=>{
-    let token = req.headers.authorization?.split(" ")[1]
-    if(token)
-    {
-        let payload = await decodeToken(token)
-        if(payload.role==='admin')
-            next()
-        else
-            res.status(401).send({message:"Only Admins are allowed"})
-    }
-    else
-    {
-        res.status(401).send({message:"No Token Found"})
-    }
-}
+const adminGaurd = async (req, res, next) => {
+  let token = req.headers.authorization?.split(" ")[1];
+  if (token) {
+    let payload = await decodeToken(token);
+    if (payload.role === "admin") next();
+    else res.status(401).send({ message: "Only Admins are allowed" });
+  } else {
+    res.status(401).send({ message: "No Token Found" });
+  }
+};
 
 export default {
   hashPassword,
@@ -78,5 +72,5 @@ export default {
   createToken,
   decodeToken,
   validate,
-  adminGaurd
+  adminGaurd,
 };
