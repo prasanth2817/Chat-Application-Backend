@@ -2,7 +2,6 @@ import Message from "../Models/Messages.js";
 import User from "../Models/Users.js";
 import Conversation from "../Models/Conversation.js";
 import { getReceiverSocketId } from "../../index.js";
-import { createConnection } from "mongoose";
 
 // // Controller to create a new message
 
@@ -10,7 +9,7 @@ const sendMessage = async (req, res) => {
   try {
     const { content } = req.body;
     const { id: receiverId } = req.params;
-    const senderId = req.user._id; // Assuming req.user._id is populated by some middleware
+    const senderId = req.user._id;
 
     // Check if a conversation exists between sender and receiver
     let conversation = await Conversation.findOne({
